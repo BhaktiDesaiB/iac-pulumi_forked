@@ -2,11 +2,8 @@ const pulumi = require("@pulumi/pulumi");
 const aws = require("@pulumi/aws");
 const vpcCIDRBlock = new pulumi.Config("db_vpc").require("cidrBlock");
 const publicRouteTableCIDRBlock = new pulumi.Config("db_publicRouteTable").require("cidrBlock");
-const region = new pulumi.Config("aws").require("region");
+const aws_region = new pulumi.Config("aws").require("region");
 
-// const publicSubnetCIDRs = process.env.PUBLIC_SUBNET_CIDRS.split(",");
-// const privateSubnetCIDRs = process.env.PRIVATE_SUBNET_CIDRS.split(",");
-// const availabilityZones = process.env.AVAILABILITY_ZONES.split(",");
 
 // Function to get available AWS availability zones
 const getAvailableAvailabilityZones = async () => {
@@ -15,6 +12,15 @@ const getAvailableAvailabilityZones = async () => {
     return zones.names.slice(0, 3);
 };
 
+// Function to calculate CIDR block for subnets
+
+const calculateSubnetCIDRBlock = (baseCIDRBlock, index) => {
+    const subnetMask = 24; // Adjust the subnet mask as needed
+    const baseCIDRParts = baseCIDRBlock.split("/");
+    const networkAddress = baseCIDRParts[0].split(".");
+    const newSubnetAddress = `${networkAddress[0]}.${networkAddress[1]}.${index}.${networkAddress[2]}`;
+    return `${newSubnetAddress}/${subnetMask}`;
+};
 
 // Create Virtual Private Cloud (VPC)
 const db_vpc = new aws.ec2.Vpc("db_vpc", {
@@ -25,7 +31,7 @@ const db_vpc = new aws.ec2.Vpc("db_vpc", {
     },
 });
 
-//available availability zones
+// Get available availability zones
 const createSubnets = async () => {
     const availabilityZones = await getAvailableAvailabilityZones();
 
@@ -63,28 +69,32 @@ const createSubnets = async () => {
     const db_privateSubnets = [];
 
     for (let i = 0; i < availabilityZones.length; i++) {
+
+        // Calculate the CIDR block for public and private subnets
+
+        const publicSubnetCIDRBlock = calculateSubnetCIDRBlock(vpcCIDRBlock, i + 10);
+        const privateSubnetCIDRBlock = calculateSubnetCIDRBlock(vpcCIDRBlock, i + 15);
+        
         // Create public subnet
         const publicSubnet = new aws.ec2.Subnet(`db_publicSubnet${i + 1}`, {
             vpcId: db_vpc.id,
             availabilityZone: availabilityZones[i],
-            cidrBlock: `10.0.1${i + 1}.0/24`, // Adjust CIDR blocks as needed
+            cidrBlock: publicSubnetCIDRBlock,
             tags: {
                 Name: `db_publicSubnet${i + 1}`,
             },
         });
-
         db_publicSubnets.push(publicSubnet);
 
         // Create private subnet
         const privateSubnet = new aws.ec2.Subnet(`db_privateSubnet${i + 1}`, {
             vpcId: db_vpc.id,
             availabilityZone: availabilityZones[i],
-            cidrBlock: `10.0.2${i + 1}.0/24`, // Adjust CIDR blocks as needed
+            cidrBlock: privateSubnetCIDRBlock,
             tags: {
                 Name: `db_privateSubnet${i + 1}`,
             },
         });
-
         db_privateSubnets.push(privateSubnet);
     }
 
@@ -111,7 +121,5 @@ const createSubnets = async () => {
     }
 };
 
-
 // Invoke the function to create subnets
 createSubnets();
-

@@ -28,9 +28,11 @@
 
 5. update pulumi.dev.yaml with all the environment variables
 
-6. to execute the code block
+6. to execute the resources
     ```pulumi up```
-    and to refresh the code
+    to destroy the resources
+    ```pulumi destroy```
+    and to refresh the resources
     ```pulumi refresh```
 
     Note : refresh pulumi everytime you change region.
