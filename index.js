@@ -4,6 +4,9 @@ const vpcCIDRBlock = new pulumi.Config("db_vpc").require("cidrBlock");
 const publicRouteTableCIDRBlock = new pulumi.Config("db_publicRouteTable").require("cidrBlock");
 const region = new pulumi.Config("aws").require("region");
 
+// const publicSubnetCIDRs = process.env.PUBLIC_SUBNET_CIDRS.split(",");
+// const privateSubnetCIDRs = process.env.PRIVATE_SUBNET_CIDRS.split(",");
+// const availabilityZones = process.env.AVAILABILITY_ZONES.split(",");
 
 // Function to get available AWS availability zones
 const getAvailableAvailabilityZones = async () => {
@@ -22,7 +25,7 @@ const db_vpc = new aws.ec2.Vpc("db_vpc", {
     },
 });
 
-// Get available availability zones
+//available availability zones
 const createSubnets = async () => {
     const availabilityZones = await getAvailableAvailabilityZones();
 
@@ -107,9 +110,6 @@ const createSubnets = async () => {
         });
     }
 };
-
-// Create a public route in the public route table with the internet gateway as the target
-
 
 
 // Invoke the function to create subnets
