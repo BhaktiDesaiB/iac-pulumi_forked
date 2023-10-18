@@ -5,7 +5,8 @@ const publicRouteTableCIDRBlock = new pulumi.Config("db_publicRouteTable").requi
 const region = new pulumi.Config("aws").require("region");
 const db_keyName = new pulumi.Config("db_vpc").require("key");
 
-// Function to get available AWS availability zones
+
+// Function for AWS availability zones
 const getAvailableAvailabilityZones = async () => {
     const zones = await aws.getAvailabilityZones({ state: "available" });
     const i = Math.min(zones.names.length, 3);
@@ -13,7 +14,7 @@ const getAvailableAvailabilityZones = async () => {
     return zones.names.slice(0, i);
 };
 
-// Function to calculate CIDR block for subnets
+//calculate CIDR for subnets
 const calculateSubnetCIDRBlock = (baseCIDRBlock, index) => {
     const subnetMask = 24; // Adjust the subnet mask as needed
     const baseCIDRParts = baseCIDRBlock.split("/");
@@ -22,7 +23,7 @@ const calculateSubnetCIDRBlock = (baseCIDRBlock, index) => {
     return `${newSubnetAddress}/${subnetMask}`;
 };
 
-// Creating Virtual Private Cloud (VPC)
+//Virtual Private Cloud (VPC)
 const db_vpc = new aws.ec2.Vpc("db_vpc", {
     cidrBlock: vpcCIDRBlock,
     instanceTenancy: "default",
@@ -31,7 +32,7 @@ const db_vpc = new aws.ec2.Vpc("db_vpc", {
     },
 });
 
-// Get available availability zones
+// availability zones
 const createSubnets = async () => {
     const availabilityZones = await getAvailableAvailabilityZones();
     // Internet Gateway and attaching it to the VPC
@@ -166,6 +167,4 @@ const createSubnets = async () => {
         },
     });
 };
-
-//function to create subnets
-createSubnets();
+createSubnets(); //function to create subnets
