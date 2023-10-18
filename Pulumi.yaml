@@ -1,4 +1,4 @@
-name: dev_iac_pulumi
+name: demo
 runtime:
   name: nodejs
   options:

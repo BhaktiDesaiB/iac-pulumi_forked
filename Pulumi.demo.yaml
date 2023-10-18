@@ -1,0 +1,7 @@
+encryptionsalt: v1:TnuoyeczoO8=:v1:wvesgwL+gzh1Ubbm:iiwyryxcOvXdXGCDnVtMEA08EwIlhA==
+config:
+  aws:region: us-east-1
+  aws:profile: demo
+  db_vpc:key: db_demo_keypair
+  db_publicRouteTable:cidrBlock: "0.0.0.0/0"
+  db_vpc:cidrBlock: "10.0.0.0/16"

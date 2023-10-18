@@ -1,5 +1,5 @@
 {
-    "name": "dev_iac_pulumi",
+    "name": "demo",
     "main": "index.js",
     "dependencies": {
         "@pulumi/pulumi": "^3.0.0",
