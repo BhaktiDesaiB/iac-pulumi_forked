@@ -7,7 +7,7 @@ const db_keyName = new pulumi.Config("db_vpc").require("key");
 const dbName = new pulumi.Config("dbName").require("name");
 const dbPassword = new pulumi.Config("dbPassword").require("password");
 const dbUserName = new pulumi.Config("dbUserName").require("user");
-
+const db_ami = "ami-02c042995e4034db5";
 
 // Function for AWS availability zones
 const getAvailableAvailabilityZones = async () => {
@@ -162,9 +162,7 @@ const createSubnets = async () => {
         });
     }
 
-    // ----------  RDS configuration starts here ...
     // Create a security group for RDS instances
-
     const databaseSecurityGroup = new aws.ec2.SecurityGroup("databaseSecurityGroup", {
         vpcId: db_vpc.id,
         ingress: [
@@ -251,16 +249,13 @@ const createSubnets = async () => {
     // User data script to configure the EC2 instance
 
     const userData = pulumi.interpolate`#!/bin/bash
- 
     # Define the path to the .env file
     envFile="/opt/csye6225/bhaktidesai_002701264_05/.env"
-     
     # Check if the .env file exists
     if [ -e "$envFile" ]; then
       # If it exists, remove it
       sudo rm "$envFile"
     fi
-     
     # Create the .env file
     sudo touch "$envFile"
     echo "DB_NAME='${rdsInstance.dbName}'" | sudo tee -a "$envFile"
@@ -275,7 +270,7 @@ const createSubnets = async () => {
     // EC2 Instance
     const ec2Instance = new aws.ec2.Instance("ec2Instance", {
         instanceType: "t2.micro", // Set the desired instance type
-        ami: "ami-040c0c70318ff93ac", // Replace with your custom AMI ID
+        ami: db_ami, // Replace with your custom AMI ID
         vpcSecurityGroupIds: [appSecurityGroup.id],
         subnetId: db_publicSubnets[0].id, // Choose one of your public subnets
         vpcId: db_vpc.id,
