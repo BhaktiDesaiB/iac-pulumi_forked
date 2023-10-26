@@ -5,3 +5,6 @@ config:
   db_vpc:key: db_demo_keypair
   db_publicRouteTable:cidrBlock: "0.0.0.0/0"
   db_vpc:cidrBlock: "10.0.0.0/16"
+  dbName:name: csye6225
+  dbUserName:user: root
+  dbPassword:password: root#123
