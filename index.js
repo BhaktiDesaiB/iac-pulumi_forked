@@ -7,7 +7,7 @@ const db_keyName = new pulumi.Config("db_vpc").require("key");
 const dbName = new pulumi.Config("dbName").require("name");
 const dbPassword = new pulumi.Config("dbPassword").require("password");
 const dbUserName = new pulumi.Config("dbUserName").require("user");
-const db_ami = "ami-0ced45d96b68ffaaa";
+const db_ami = "ami-0c04218f9ed40b823";
 const domainName = new pulumi.Config("dbDomainName").require("domainName");
 
 
@@ -265,11 +265,7 @@ const createSubnets = async () => {
     echo "DB_USERNAME='${rdsInstance.username}'" | sudo tee -a "$envFile"
     echo "DB_PASSWORD='${rdsInstance.password}'" | sudo tee -a "$envFile"
     echo "PORT='3306'" | sudo tee -a "$envFile"
-    sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
--a fetch-config \
-    -m ec2 \
-    -c file:/opt/csye6225/bhaktidesai_002701264_05/amazon-cloudwatch-agent.json \
-    -s
+    sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/csye6225/bhaktidesai_002701264_05/amazon-cloudwatch-agent.json
     sudo systemctl enable amazon-cloudwatch-agent
     sudo systemctl start amazon-cloudwatch-agent`;
     pulumi.log.info(
