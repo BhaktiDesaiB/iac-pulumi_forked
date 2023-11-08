@@ -1,10 +1,11 @@
 encryptionsalt: v1:zuIF2OUMsGs=:v1:X7LZn+S6Ql/yA4Er:B+xnmg2C8X0jnHybHB+PfoBdNQAmBg==
 config:
-  aws:region: us-east-1
   aws:profile: dev
-  db_vpc:key: db_keypair
+  aws:region: us-east-1
   db_publicRouteTable:cidrBlock: "0.0.0.0/0"
   db_vpc:cidrBlock: "10.0.0.0/16"
+  db_vpc:key: db_keypair
   dbName:name: csye6225
   dbUserName:user: root
   dbPassword:password: root#123
+  dbDomainName:domainName : dev.dbwebapp.me

@@ -7,7 +7,9 @@ const db_keyName = new pulumi.Config("db_vpc").require("key");
 const dbName = new pulumi.Config("dbName").require("name");
 const dbPassword = new pulumi.Config("dbPassword").require("password");
 const dbUserName = new pulumi.Config("dbUserName").require("user");
-const db_ami = "ami-02c042995e4034db5";
+const db_ami = "ami-0ced45d96b68ffaaa";
+const domainName = new pulumi.Config("dbDomainName").require("domainName");
+
 
 // Function for AWS availability zones
 const getAvailableAvailabilityZones = async () => {
@@ -262,10 +264,42 @@ const createSubnets = async () => {
     echo "DB_HOST='${DB_HOST}'" | sudo tee -a "$envFile"
     echo "DB_USERNAME='${rdsInstance.username}'" | sudo tee -a "$envFile"
     echo "DB_PASSWORD='${rdsInstance.password}'" | sudo tee -a "$envFile"
-    echo "PORT='3306'" | sudo tee -a "$envFile"`;
+    echo "PORT='3306'" | sudo tee -a "$envFile"
+    sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+-a fetch-config \
+    -m ec2 \
+    -c file:/opt/csye6225/bhaktidesai_002701264_05/amazon-cloudwatch-agent.json \
+    -s
+    sudo systemctl enable amazon-cloudwatch-agent
+    sudo systemctl start amazon-cloudwatch-agent`;
     pulumi.log.info(
         pulumi.interpolate`DB data: DB_HOST, userDataScript - ${DB_HOST}, ${userData}`
     );
+
+    // Create IAM Role for CloudWatch Agent
+    const ec2CloudWatch = new aws.iam.Role("ec2CloudWatch", {
+        assumeRolePolicy: JSON.stringify({
+            Version: "2012-10-17",
+            Statement: [{
+                Action: "sts:AssumeRole",
+                Effect: "Allow",
+                Principal: {
+                    Service: "ec2.amazonaws.com",
+                },
+            }],
+            // name: "db_IAMrole",
+        }),
+    });
+ 
+    // Attach AmazonCloudWatchAgentServerPolicy to the IAM role
+    const cloudWatchAgentPolicyAttachment = new aws.iam.RolePolicyAttachment("CloudWatchAgentPolicyAttachment", {
+        role: ec2CloudWatch,
+        policyArn: "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+    });
+
+    let instanceProfile = new aws.iam.InstanceProfile("myInstanceProfile", {
+        role: ec2CloudWatch.name
+    });
 
     // EC2 Instance
     const ec2Instance = new aws.ec2.Instance("ec2Instance", {
@@ -284,8 +318,39 @@ const createSubnets = async () => {
         tags: {
             Name: "db_EC2Instance",
         },
+        iamInstanceProfile: instanceProfile.name,
     });
+
+// Function to create Route53 DNS A record
+const createDnsARecord = async (domainName, ec2Instance) => {
+    const hostedZone = await aws.route53.getZone({
+        name: domainName,
+    });
+
+    if (hostedZone) {
+        const recordName = domainName;
+        const recordType = "A";
+        const recordTtl = 60; 
+        const recordSet = new aws.route53.Record(`dnsARecord-${recordName}`, {
+            name: recordName,
+            type: recordType,
+            zoneId: hostedZone.zoneId,
+            records: [ec2Instance.publicIp],
+            ttl: recordTtl,
+            allowOverwrite: true,
+        });
+    } 
+    else 
+    {
+        console.error(`Zone for domain '${domainName}' not found.`);
+    }
 };
+
+// Call the function to create DNS A record
+createDnsARecord(domainName, ec2Instance);
+};
+
+
 
 //function to create subnets
 createSubnets();

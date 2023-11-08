@@ -8,3 +8,4 @@ config:
   dbName:name: csye6225
   dbUserName:user: root
   dbPassword:password: root#123
+  dbDomainName:domainName : demo.dbwebapp.me
