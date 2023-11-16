@@ -132,7 +132,8 @@ const createSubnets = async () => {
                 fromPort: 22,
                 toPort: 22,
                 protocol: "tcp",
-                cidrBlocks: ["0.0.0.0/0"], // Allow SSH from anywhere
+                securityGroups: [loadBalancerSecurityGroup.id],
+                // cidrBlocks: ["0.0.0.0/0"], // Allow SSH from anywhere
             },
             // {
             //     fromPort: 80,
