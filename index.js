@@ -7,7 +7,7 @@ const db_keyName = new pulumi.Config("db_vpc").require("key");
 const dbName = new pulumi.Config("dbName").require("name");
 const dbPassword = new pulumi.Config("dbPassword").require("password");
 const dbUserName = new pulumi.Config("dbUserName").require("user");
-const db_ami = "ami-0c04218f9ed40b823";
+const db_ami = "ami-0c5b4883cd5735858";
 const domainName = new pulumi.Config("dbDomainName").require("domainName");
 
 
@@ -102,6 +102,28 @@ const createSubnets = async () => {
         db_privateSubnets.push(privateSubnet);
     }
 
+      // Create a security group for the load balancer
+      const loadBalancerSecurityGroup = new aws.ec2.SecurityGroup("loadBalancerSecurityGroup", {
+        vpcId: db_vpc.id,
+        ingress: [{
+                protocol: "tcp",
+                fromPort: 80,
+                toPort: 80,
+                cidrBlocks: ["0.0.0.0/0"]
+            },
+            {
+                protocol: "tcp",
+                fromPort: 443,
+                toPort: 443,
+                cidrBlocks: ["0.0.0.0/0"]
+            },
+        ],
+        tags: {
+            Name: "LoadBalancerSecurityGroup"
+        },
+    });
+
+
     // EC2 Security Group for Web Applications
     const appSecurityGroup = new aws.ec2.SecurityGroup("appSecurityGroup", {
         vpcId: db_vpc.id,
@@ -112,23 +134,24 @@ const createSubnets = async () => {
                 protocol: "tcp",
                 cidrBlocks: ["0.0.0.0/0"], // Allow SSH from anywhere
             },
-            {
-                fromPort: 80,
-                toPort: 80,
-                protocol: "tcp",
-                cidrBlocks: ["0.0.0.0/0"], // Allow HTTP from anywhere
-            },
-            {
-                fromPort: 443,
-                toPort: 443,
-                protocol: "tcp",
-                cidrBlocks: ["0.0.0.0/0"], // Allow HTTPS from anywhere
-            },
+            // {
+            //     fromPort: 80,
+            //     toPort: 80,
+            //     protocol: "tcp",
+            //     cidrBlocks: ["0.0.0.0/0"], // Allow HTTP from anywhere
+            // },
+            // {
+            //     fromPort: 443,
+            //     toPort: 443,
+            //     protocol: "tcp",
+            //     cidrBlocks: ["0.0.0.0/0"], // Allow HTTPS from anywhere
+            // },
             {
                 fromPort: 3000,
                 toPort: 3000,
                 protocol: "tcp",
-                cidrBlocks: ["0.0.0.0/0"],
+                // cidrBlocks: ["0.0.0.0/0"],
+                securityGroups: [loadBalancerSecurityGroup.id],
             }
         ],
         egress: [
@@ -144,6 +167,15 @@ const createSubnets = async () => {
         },
     });
     
+    let loadbalancerEgressRule = new aws.ec2.SecurityGroupRule("myloadbalancerEgressRule", {
+        type: "egress",
+        securityGroupId: loadBalancerSecurityGroup.id,
+        protocol: "tcp",
+        fromPort: 3000,
+        toPort: 3000,
+        sourceSecurityGroupId: appSecurityGroup.id
+      });
+
     for (let i = 0; i < db_publicSubnets.length; i++) {
         new aws.ec2.RouteTableAssociation(`db_publicRouteTableAssociation-${i}`, {
             subnetId: db_publicSubnets[i].id,
@@ -174,7 +206,7 @@ const createSubnets = async () => {
                 toPort: 3306,
                 protocol: "tcp",
                 securityGroups: [appSecurityGroup.id],
-                cidrBlocks: ["0.0.0.0/0"]
+                // cidrBlocks: ["0.0.0.0/0"]
             },
         ],
         egress: [
@@ -184,7 +216,7 @@ const createSubnets = async () => {
                 toPort: 3306,
                 protocol: "tcp",
                 securityGroups: [appSecurityGroup.id],
-                cidrBlocks: ["0.0.0.0/0"]
+                // cidrBlocks: ["0.0.0.0/0"]
             },
         ]
     });
@@ -214,7 +246,7 @@ const createSubnets = async () => {
     });
 
     const rdsSubnetGroup = new aws.rds.SubnetGroup("rds_subnet_group", {
-                subnetIds: [db_privateSubnets[0].id, db_privateSubnets[1].id],
+                subnetIds: db_privateSubnets.map(subnet => subnet.id),
                 tags: {
                     Name: "rdsSubnetGroup", // You can name it as desired
                 },
@@ -229,15 +261,15 @@ const createSubnets = async () => {
         identifier: "csye6225",
         engine: "mariadb",
         instanceClass: "db.t2.micro", // Choose the cheapest instance class
-        username: dbUserName,
-        password: dbPassword,
+        username: "root",
+        password: "root#123",
         skipFinalSnapshot: true, // To avoid taking a final snapshot when deleting the RDS instance
         publiclyAccessible: false, // Ensure it's not publicly accessible
         dbSubnetGroupName: rdsSubnetGroup.name,
         vpcSecurityGroupIds: [databaseSecurityGroup.id], //ec2Instance.id.vpcSecurityGroupIds --> this does not attach the databseSecurityGroup, 
         // Attach the security group
         // subnetIds: db_privateSubnets.map(subnet => subnet.id), // Use private subnets
-        dbName: dbName, // Database name
+        dbName: "csye6225", // Database name
         tags: {
             Name: "rds-db-instance",
         },
@@ -272,6 +304,8 @@ const createSubnets = async () => {
         pulumi.interpolate`DB data: DB_HOST, userDataScript - ${DB_HOST}, ${userData}`
     );
 
+    const userDataBase64 = pulumi.output(userData).apply(userData => Buffer.from(userData).toString('base64'));
+
     // Create IAM Role for CloudWatch Agent
     const ec2CloudWatch = new aws.iam.Role("ec2CloudWatch", {
         assumeRolePolicy: JSON.stringify({
@@ -297,55 +331,229 @@ const createSubnets = async () => {
         role: ec2CloudWatch.name
     });
 
-    // EC2 Instance
-    const ec2Instance = new aws.ec2.Instance("ec2Instance", {
-        instanceType: "t2.micro", // Set the desired instance type
-        ami: db_ami, // Replace with your custom AMI ID
-        vpcSecurityGroupIds: [appSecurityGroup.id],
-        subnetId: db_publicSubnets[0].id, // Choose one of your public subnets
+    // // EC2 Instance
+    // const ec2Instance = new aws.ec2.Instance("ec2Instance", {
+    //     instanceType: "t2.micro", // Set the desired instance type
+    //     ami: db_ami, // Replace with your custom AMI ID
+    //     vpcSecurityGroupIds: [appSecurityGroup.id],
+    //     subnetId: db_publicSubnets[0].id, // Choose one of your public subnets
+    //     vpcId: db_vpc.id,
+    //     keyName: db_keyName,
+    //     rootBlockDevice: {
+    //         volumeSize: 25,
+    //         volumeType: "gp2",
+    //     },
+    //     protectFromTermination: false,
+    //     userData: userData, // Attach the user data script
+    //     tags: {
+    //         Name: "db_EC2Instance",
+    //     },
+    //     iamInstanceProfile: instanceProfile.name,
+    // });
+
+
+ // AutoScaling Code starts here...
+ 
+    // Launch Template for Auto Scaling Group
+    const webAppLaunchTemplate = new aws.ec2.LaunchTemplate("webAppLaunchTemplate", {
         vpcId: db_vpc.id,
+        securityGroups: [appSecurityGroup.id],
+        vpcSecurityGroupIds: [appSecurityGroup.id],
+        imageId: db_ami,
+        instanceType: "t2.micro",
         keyName: db_keyName,
+        userData: userDataBase64,
+        iamInstanceProfile: {name: instanceProfile.name},
+        associatePublicIpAddress: false,
         rootBlockDevice: {
             volumeSize: 25,
             volumeType: "gp2",
+            deleteOnTermination: true,
         },
-        protectFromTermination: false,
-        userData: userData, // Attach the user data script
         tags: {
-            Name: "db_EC2Instance",
+            Name: "EC2Instance",
         },
-        iamInstanceProfile: instanceProfile.name,
     });
 
-// Function to create Route53 DNS A record
-const createDnsARecord = async (domainName, ec2Instance) => {
-    const hostedZone = await aws.route53.getZone({
-        name: domainName,
+    // Create a target group for the ALB
+    const appTargetGroup = new aws.lb.TargetGroup("webAppTargetGroup", {
+        port: 3000, //Application port goes here
+        protocol: "HTTP",
+        targetType: "instance",
+        vpcId: db_vpc.id,
+        healthCheck: {
+            path: "/healthz",
+            port: 3000,
+            protocol: "HTTP",
+            interval: 30,
+            timeout: 10,
+            unhealthyThreshold: 2,
+            healthyThreshold: 2,
+        },
+    });
+    
+    // Auto Scaling Group
+    const autoScalingGroup = new aws.autoscaling.Group("webAppAutoScalingGroup", {
+        // availabilityZones: availabilityZones,
+        vpcZoneIdentifiers: db_publicSubnets.map(s => s.id),
+        healthCheckType: "EC2",
+        desiredCapacity: 1,
+        maxSize: 3,
+        minSize: 1,
+        cooldown: 60,
+        iamInstanceProfile: {id: instanceProfile.id, version: "$Latest",},
+        waitForCapacityTimeout: "0",
+        protectFromScaleIn: false,
+        launchTemplate: {
+            id: webAppLaunchTemplate.id,
+          },
+          tagSpecifications: [
+            {
+              resourceType: "instance",
+              tags: [
+                {
+                  key: "Name",
+                  value: "WebAppInstance"
+                }
+              ]  
+            }
+          ],
+          targetGroupArns: [appTargetGroup.arn], // associate with the ALB target group
+          instanceRefresh: {
+              strategy: "Rolling",
+              preferences: {
+                  minHealthyPercentage: 90,
+                  instanceWarmup: 60,
+              },
+          },
+          forceDelete: true
     });
 
-    if (hostedZone) {
-        const recordName = domainName;
-        const recordType = "A";
-        const recordTtl = 60; 
-        const recordSet = new aws.route53.Record(`dnsARecord-${recordName}`, {
-            name: recordName,
-            type: recordType,
-            zoneId: hostedZone.zoneId,
-            records: [ec2Instance.publicIp],
-            ttl: recordTtl,
-            allowOverwrite: true,
+    // Auto Scaling Policies
+    const scaleUpPolicy = new aws.autoscaling.Policy("scaleUpPolicy", {
+        scalingAdjustment: 1,
+        cooldown: 60,
+        adjustmentType: "ChangeInCapacity",
+        autoscalingGroupName: autoScalingGroup.name,
+        policyType: 'SimpleScaling',
+    });
+ 
+    const scaleDownPolicy = new aws.autoscaling.Policy("scaleDownPolicy", {
+        scalingAdjustment: -1,
+        cooldown: 60,
+        adjustmentType: "ChangeInCapacity",
+        autoscalingGroupName: autoScalingGroup.name,
+        policyType: 'SimpleScaling',
+    });
+
+    // CloudWatch Alarm for CPU Usage
+    // const cpuAlarm = new aws.cloudwatch.MetricAlarm("cpuAlarm", {
+    //     comparisonOperator: "GreaterThanOrEqualToThreshold",
+    //     evaluationPeriods: 2,
+    //     metricName: "CPUUtilization",
+    //     namespace: "AWS/EC2",
+    //     period: 60,
+    //     statistic: "Average",
+    //     threshold: 5,
+    //     dimensions: {
+    //         AutoScalingGroupName: autoScalingGroup.name,
+    //     },
+    //     alarmActions: [scaleUpPolicy.arn],
+    //     okActions: [scaleDownPolicy.arn],
+    //     insufficientDataActions: [],
+    // });
+
+    // Define CPU utilization alarms for the autoscaling policies
+const highCpuAlarm = new aws.cloudwatch.MetricAlarm("HighCpuAlarm", {
+    alarmDescription: "Scaling Up Alarm",
+    comparisonOperator: "GreaterThanOrEqualToThreshold",
+    evaluationPeriods: 2,
+    metricName: "CPUUtilization",
+    namespace: "AWS/EC2",
+    period: 60,
+    statistic: "Average",
+    threshold: 5,
+    // actionsEnabled: true,
+    alarmActions: [scaleUpPolicy.arn],
+    dimensions: {
+        AutoScalingGroupName: autoScalingGroup.name,
+    },
+    // okActions: [scaleDownPolicy.arn],
+    insufficientDataActions: [],
+});
+
+const lowCpuAlarm = new aws.cloudwatch.MetricAlarm("LowCpuAlarm", {
+    alarmDescription: "Scaling Down Alarm",
+    comparisonOperator: "LessThanOrEqualToThreshold",
+    evaluationPeriods: 1,
+    metricName: "CPUUtilization",
+    namespace: "AWS/EC2",
+    period: 60,
+    statistic: "Average",
+    threshold: 3,
+    // actionsEnabled: true,
+    alarmActions: [scaleDownPolicy.arn],
+    dimensions: {
+        AutoScalingGroupName: autoScalingGroup.name,
+    },
+    // okActions: [scaleDownPolicy.arn],
+    insufficientDataActions: [],
+});
+
+
+    // Create an Application Load Balancer (ALB)
+    const loadBalancer = new aws.lb.LoadBalancer("loadBalancer", {
+        securityGroups: [loadBalancerSecurityGroup.id],
+        subnets: db_publicSubnets.map(subnet => subnet.id),
+        enableDeletionProtection: false, // Set to true if you want to enable deletion protection
         });
-    } 
-    else 
-    {
-        console.error(`Zone for domain '${domainName}' not found.`);
-    }
-};
+     
+        // Create a listener for the ALB
+        const webAppListener = new aws.lb.Listener("webAppListener", {
+            loadBalancerArn: loadBalancer.arn,
+            port: 80,
+            defaultActions: [{
+                type: "forward",
+                targetGroupArn: appTargetGroup.arn
+            }],
+        });
+
+    // Function to create Route53 DNS A record
+    const createDnsARecord = async (domainName, loadBalancer) => {
+        const hostedZone = await aws.route53.getZone({
+            name: domainName,
+        });
+    
+        if (hostedZone) {
+            const recordName = domainName;
+            const recordType = "A";
+            // const recordTtl = 60;
+            const recordSet = new aws.route53.Record(`dnsARecord-${recordName}`, {
+                name: recordName,
+                type: recordType,
+                zoneId: hostedZone.zoneId,
+                aliases: [
+                    {
+                        evaluateTargetHealth: true,
+                        name: loadBalancer.dnsName,
+                        zoneId: loadBalancer.zoneId,
+                    },
+                ],
+                //records: [ec2Instance.publicIp],
+                //ttl: recordTtl,
+                allowOverwrite: true,
+            });
+        }
+        else
+        {
+            console.error(`Zone for domain '${domainName}' not found.`);
+        }
+    };
+ 
 
 // Call the function to create DNS A record
-createDnsARecord(domainName, ec2Instance);
+createDnsARecord(domainName, loadBalancer);
 };
-
 
 
 //function to create subnets
