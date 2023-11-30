@@ -2,8 +2,11 @@
     "name": "deva7",
     "main": "index.js",
     "dependencies": {
-        "@pulumi/pulumi": "^3.0.0",
+        "@google-cloud/storage": "^7.6.0",
         "@pulumi/aws": "^5.0.0",
-        "@pulumi/awsx": "^1.0.0"
+        "@pulumi/awsx": "^1.0.0",
+        "@pulumi/gcp": "^7.2.1",
+        "@pulumi/pulumi": "^3.0.0",
+        "aws-sdk": "^2.1507.0"
     }
 }

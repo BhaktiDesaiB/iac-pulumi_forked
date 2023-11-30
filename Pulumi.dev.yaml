@@ -5,7 +5,9 @@ config:
   db_publicRouteTable:cidrBlock: "0.0.0.0/0"
   db_vpc:cidrBlock: "10.0.0.0/16"
   db_vpc:key: db_keypair
+  dbDomainName:domainName: dev.dbwebapp.me
   dbName:name: csye6225
-  dbUserName:user: root
   dbPassword:password: root#123
-  dbDomainName:domainName : dev.dbwebapp.me
+  dbUserName:user: root
+  gcp:project: devcloud-406503
+  gcp:region: us-east-1
