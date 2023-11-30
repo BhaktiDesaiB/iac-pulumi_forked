@@ -1,5 +1,7 @@
 const pulumi = require("@pulumi/pulumi");
 const aws = require("@pulumi/aws");
+const gcp = require("@pulumi/gcp");
+
 const vpcCIDRBlock = new pulumi.Config("db_vpc").require("cidrBlock");
 const publicRouteTableCIDRBlock = new pulumi.Config("db_publicRouteTable").require("cidrBlock");
 const region = new pulumi.Config("aws").require("region");
@@ -7,9 +9,10 @@ const db_keyName = new pulumi.Config("db_vpc").require("key");
 const dbName = new pulumi.Config("dbName").require("name");
 const dbPassword = new pulumi.Config("dbPassword").require("password");
 const dbUserName = new pulumi.Config("dbUserName").require("user");
-const db_ami = "ami-0c5b4883cd5735858";
+const db_ami = "ami-076a5a47f8a2c18f7";
 const domainName = new pulumi.Config("dbDomainName").require("domainName");
 
+// const { handler } = require("C:/Users/bhakt/Downloads/BhaktiBharat_Desai_002701264_08/BhaktiBharat_Desai_002701264_08/serverless_forked"); 
 
 // Function for AWS availability zones
 const getAvailableAvailabilityZones = async () => {
@@ -281,8 +284,58 @@ const createSubnets = async () => {
 
     // user database configuration
     const DB_HOST = pulumi.interpolate`${rdsInstance.address}`;
-    // User data script to configure the EC2 instance
+    
+        // // Function to create IAM Role & Policy for Lambda Function
+        // const createLambdaIAMRole = () => {
+        //     const lambdaRole = new aws.iam.Role("lambdaRole", {
+        //         assumeRolePolicy: JSON.stringify({
+        //             Version: "2012-10-17",
+        //             Statement: [{
+        //                 Action: "sts:AssumeRole",
+        //                 Effect: "Allow",
+        //                 Principal: {
+        //                     Service: "lambda.amazonaws.com",
+        //                 },
+        //             }],
+        //         }),
+        //     });
+        //     return lambdaRole;
+        // };
 
+        const lambdaRole = new aws.iam.Role('lambdaRole', {
+            assumeRolePolicy: JSON.stringify({
+                Version: "2012-10-17",
+                Statement: [{
+                    Action: "sts:AssumeRole",
+                    Effect: "Allow",
+                    Principal: {
+                        Service: "lambda.amazonaws.com",
+                    },
+                }],
+            }),
+        });
+        
+        // const rolePolicyAttachment = new aws.iam.RolePolicyAttachment("lambdaRolePolicyAttachment", {
+        //     policyArn: policy.arn,
+        //     role: lambdaRole.name,
+        // });
+
+     
+    const snsTopic = new aws.sns.Topic('snsTopic');
+    // Attach snsPolicyAttachment to the IAM role
+    const snsPolicyAttachment = new aws.iam.RolePolicyAttachment("snsPolicyAttachment", {
+        role: lambdaRole.name,
+        policyArn: "arn:aws:iam::aws:policy/AmazonSNSFullAccess",
+    });
+
+
+      // Attach dynamoDBPolicy to the IAM role
+      const dynamoDBPolicyAttachment = new aws.iam.RolePolicyAttachment("dynamoDBPolicyAttachment", {
+        role: lambdaRole.name,
+        policyArn: "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess",
+    });
+
+    // User data script to configure the EC2 instance
     const userData = pulumi.interpolate`#!/bin/bash
     # Define the path to the .env file
     envFile="/opt/csye6225/bhaktidesai_002701264_05/.env"
@@ -297,6 +350,7 @@ const createSubnets = async () => {
     echo "DB_HOST='${DB_HOST}'" | sudo tee -a "$envFile"
     echo "DB_USERNAME='${rdsInstance.username}'" | sudo tee -a "$envFile"
     echo "DB_PASSWORD='${rdsInstance.password}'" | sudo tee -a "$envFile"
+    echo "snsTopic='${snsTopic.arn}'" | sudo tee -a "$envFile"
     echo "PORT='3306'" | sudo tee -a "$envFile"
     sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/csye6225/bhaktidesai_002701264_05/amazon-cloudwatch-agent.json
     sudo systemctl enable amazon-cloudwatch-agent
@@ -331,27 +385,7 @@ const createSubnets = async () => {
     let instanceProfile = new aws.iam.InstanceProfile("myInstanceProfile", {
         role: ec2CloudWatch.name
     });
-
-    // // EC2 Instance
-    // const ec2Instance = new aws.ec2.Instance("ec2Instance", {
-    //     instanceType: "t2.micro", // Set the desired instance type
-    //     ami: db_ami, // Replace with your custom AMI ID
-    //     vpcSecurityGroupIds: [appSecurityGroup.id],
-    //     subnetId: db_publicSubnets[0].id, // Choose one of your public subnets
-    //     vpcId: db_vpc.id,
-    //     keyName: db_keyName,
-    //     rootBlockDevice: {
-    //         volumeSize: 25,
-    //         volumeType: "gp2",
-    //     },
-    //     protectFromTermination: false,
-    //     userData: userData, // Attach the user data script
-    //     tags: {
-    //         Name: "db_EC2Instance",
-    //     },
-    //     iamInstanceProfile: instanceProfile.name,
-    // });
-
+    
 
  // AutoScaling Code starts here...
  
@@ -447,23 +481,6 @@ const createSubnets = async () => {
         policyType: 'SimpleScaling',
     });
 
-    // CloudWatch Alarm for CPU Usage
-    // const cpuAlarm = new aws.cloudwatch.MetricAlarm("cpuAlarm", {
-    //     comparisonOperator: "GreaterThanOrEqualToThreshold",
-    //     evaluationPeriods: 2,
-    //     metricName: "CPUUtilization",
-    //     namespace: "AWS/EC2",
-    //     period: 60,
-    //     statistic: "Average",
-    //     threshold: 5,
-    //     dimensions: {
-    //         AutoScalingGroupName: autoScalingGroup.name,
-    //     },
-    //     alarmActions: [scaleUpPolicy.arn],
-    //     okActions: [scaleDownPolicy.arn],
-    //     insufficientDataActions: [],
-    // });
-
     // Define CPU utilization alarms for the autoscaling policies
 const highCpuAlarm = new aws.cloudwatch.MetricAlarm("HighCpuAlarm", {
     alarmDescription: "Scaling Up Alarm",
@@ -550,7 +567,105 @@ const lowCpuAlarm = new aws.cloudwatch.MetricAlarm("LowCpuAlarm", {
             console.error(`Zone for domain '${domainName}' not found.`);
         }
     };
- 
+
+
+   
+
+
+
+
+    const createGoogleServiceAccount = () => {
+        const serviceAccount = new gcp.serviceaccount.Account("myServiceAccount", {
+            accountId: "my-service-account",
+            displayName: "My Service Account",
+        });
+    
+        const key = new gcp.serviceaccount.Key("myServiceAccountKey", {
+            serviceAccountId: serviceAccount.id,
+        });
+    
+        // // Grant necessary roles/permissions to the service account
+        // const roleBinding = new gcp.projects.IAMBinding("myServiceAccountRoleBinding", {
+        //     project: pulumi.getProject(),
+        //     members: [serviceAccount.email],
+        //     role: "roles/storage.admin", // Granting storage admin role as an example
+        // });
+    
+        return key;
+    };
+    
+    // Function to create Google Cloud Storage Bucket
+    const createStorageBucket = () => {
+        const bucketName = `dbbucket-${Date.now()}`;
+        const bucket = new gcp.storage.Bucket(bucketName, {
+            name: bucketName,
+            location: "US",
+    });
+    return bucket;
+    };
+    
+    const serviceAccountKey = createGoogleServiceAccount();
+    const storageBucket = createStorageBucket();
+
+    
+    // Function to create DynamoDB Table
+    const createDynamoDBTable = () => {
+        const dynamoDBTable = new aws.dynamodb.Table("myDynamoDBTable", {
+            attributes: [{
+                name: "userID",
+                type: "S",
+            }],
+            hashKey: "userID",
+            billingMode: "PAY_PER_REQUEST",
+        });
+        return dynamoDBTable;
+    };
+    
+  
+
+    // Function to create AWS Lambda Function
+    const createLambdaFunction = (storageBucket, lambdaRole, dynamoDBTable, gcpAccessKey) => {
+        const lambdaFunction = new aws.lambda.Function("myLambdaFunction", {
+            code: new pulumi.asset.AssetArchive({
+                ".": new pulumi.asset.FileArchive("C:/Users/bhakt/Downloads/BhaktiBharat_Desai_002701264_08/BhaktiBharat_Desai_002701264_08/serverless_forked"),
+            }),
+            handler: "index.handler", // Update with your actual handler file and function name
+            runtime: "nodejs18.x",
+            environment: {
+                variables: {
+                    GCP_ACCESS_KEY: gcpAccessKey.privateKey,
+                    STORAGE_BUCKET_NAME: storageBucket,
+                    DYNAMODB_TABLE_NAME: dynamoDBTable.name,
+                    // GOOGLE_CREDENTIALS: serviceAccountKey.privateKey,
+                    
+                    // Add email server configuration here as needed
+                },
+            },
+            role: lambdaRole.arn,
+        });
+    
+        const lambdaPermission = new aws.lambda.Permission("lambdaPermission", {
+            action: "lambda:InvokeFunction",
+            function: lambdaFunction,
+            principal: "s3.amazonaws.com",
+            sourceArn: snsTopic.arn,
+        });
+    
+        return lambdaFunction;
+    };
+    
+    // Call functions to create resources
+    // const lambdaIAMRole = createLambdaIAMRole();
+    const dynamoDBTable = createDynamoDBTable();
+    
+    // Assuming you have the path to your Lambda function code folder
+    const lambdaFunction = createLambdaFunction(storageBucket, lambdaRole, dynamoDBTable, serviceAccountKey);
+    
+    const snsSubscription = snsTopic.onEvent("snsSubscription",lambdaFunction);
+    
+    // Output the generated GCP access key
+    // pulumi.log.info(`Generated GCP Access Key: ${serviceAccountKey.privateKey}`);
+    
 
 // Call the function to create DNS A record
 createDnsARecord(domainName, loadBalancer);

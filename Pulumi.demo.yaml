@@ -1,11 +1,13 @@
 encryptionsalt: v1:TnuoyeczoO8=:v1:wvesgwL+gzh1Ubbm:iiwyryxcOvXdXGCDnVtMEA08EwIlhA==
 config:
-  aws:region: us-east-1
   aws:profile: demo
-  db_vpc:key: db_demo_keypair
+  aws:region: us-east-1
   db_publicRouteTable:cidrBlock: "0.0.0.0/0"
   db_vpc:cidrBlock: "10.0.0.0/16"
+  db_vpc:key: db_demo_keypair
+  dbDomainName:domainName: demo.dbwebapp.me
   dbName:name: csye6225
-  dbUserName:user: root
   dbPassword:password: root#123
-  dbDomainName:domainName : demo.dbwebapp.me
+  dbUserName:user: root
+  gcp:project: democloud-406601
+  gcp:region: us-east-1
