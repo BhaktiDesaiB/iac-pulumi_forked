@@ -1,13 +1,19 @@
 encryptionsalt: v1:zuIF2OUMsGs=:v1:X7LZn+S6Ql/yA4Er:B+xnmg2C8X0jnHybHB+PfoBdNQAmBg==
 config:
-  aws:profile: dev
+  aws:config:profile: dev
   aws:region: us-east-1
-  db_publicRouteTable:cidrBlock: "0.0.0.0/0"
-  db_vpc:cidrBlock: "10.0.0.0/16"
-  db_vpc:key: db_keypair
-  dbDomainName:domainName: dev.dbwebapp.me
-  dbName:name: csye6225
-  dbPassword:password: root#123
-  dbUserName:user: root
-  gcp:project: devcloud-406503
-  gcp:region: us-east-1
+  my_vpc:cidrBlock: "10.0.0.0/16"
+  my_publicRouteTable:cidrBlock: "0.0.0.0/0"
+  AMIID:AMIID: "ami-08d04b2ad4af1a47f"
+  DomainName:DomainName: "dev.dbwebapp.me"
+  KeyPair:KeyPair: "EC2Instance_keypair"
+  dbName:name: "csye6225"
+  dbPassword:password: "root#123"
+  dbUserName:user: "root"
+  gcp:project: "devcloud-406503"
+  gcp:region: "us-east-1"
+  gcp:bucketname: "csye6225-dbdev"
+  github:pat: "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"
+  mailgun:API: "a650634d76bdfb7c76869df457b83c0e-30b58138-d685780d"
+  
+# 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
